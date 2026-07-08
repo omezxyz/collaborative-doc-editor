@@ -1,0 +1,56 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id         String       @id @default(uuid())
+  email      String       @unique
+  name       String?
+  permission DocumentPermission[]
+  updates    DocumentUpdate[]
+}
+
+model Document {
+  id          String               @id @default(uuid())
+  title       String               @default("Untitled Document")
+  content     Bytes?               // <--- ADD THIS: Stores the full Yjs binary snapshot
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  permissions DocumentPermission[]
+  updates     DocumentUpdate[]     // Keep this for your history/time-travel feature
+}
+
+model DocumentPermission {
+  id         String   @id @default(uuid())
+  documentId String
+  userId     String
+  role       Role
+  lastActive DateTime @default(now()) // <-- Add this line
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+}
+
+model DocumentUpdate {
+  id          String   @id @default(uuid())
+  documentId  String
+  userId      String?
+  delta       Bytes    // Stores the binary Yjs state updates
+  version     Int
+  message     String?  // 💡 ADD THIS LINE RIGHT HERE
+  createdAt   DateTime @default(now())
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id])
+}

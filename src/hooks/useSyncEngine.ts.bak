@@ -1,0 +1,73 @@
+"use client";
+
+import { useEffect, useState } from 'react';
+import * as Y from 'yjs';
+
+export function useSyncEngine(docId: string, yDoc: Y.Doc | null, currentRole?: string) {
+  const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
+  const [syncState, setSyncState] = useState<'clean' | 'syncing' | 'offline'>('clean');
+
+  useEffect(() => {
+    if (!yDoc) return;
+
+    const updateStatus = () => {
+      setIsOnline(navigator.onLine);
+      if (navigator.onLine) triggerSync();
+    };
+
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+
+    const handleDocUpdate = async (update: Uint8Array, origin: any) => {
+      if (origin === 'server-sync') return; // Prevent infinite event loops
+      
+      if (!navigator.onLine) {
+        setSyncState('offline');
+        return; 
+      }
+
+      setSyncState('syncing');
+      await pushPayload(update);
+    };
+
+    yDoc.on('update', handleDocUpdate);
+
+    const pushPayload = async (update: Uint8Array) => {
+      try {
+        await fetch(`/api/documents/${docId}/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: update
+        });
+        setSyncState('clean');
+      } catch {
+        setSyncState('offline');
+      }
+    };
+
+    const triggerSync = async () => {
+      setSyncState('syncing');
+      try {
+        const res = await fetch(`/api/documents/${docId}/sync`);
+        if (res.ok) {
+          const buffer = await res.arrayBuffer();
+          if (buffer.byteLength > 0) {
+            Y.applyUpdate(yDoc, new Uint8Array(buffer), 'server-sync');
+          }
+          setSyncState('clean');
+        }
+      } catch {
+        setSyncState('offline');
+      }
+    };
+    console.log(`📡 SyncEngine initialized for Document: ${docId} with Role: ${currentRole}`);
+    return () => {
+      window.removeEventListener('online', updateStatus);
+      window.removeEventListener('offline', updateStatus);
+      yDoc.off('update', handleDocUpdate);
+    };
+    
+  }, [docId, yDoc, currentRole]);
+
+  return { isOnline, syncState };
+}
