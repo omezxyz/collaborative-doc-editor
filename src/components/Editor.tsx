@@ -23,18 +23,19 @@ import * as Y from 'yjs';
 export default function Editor({ docId }: { docId: string }) {
   const { yDoc, isReady, role } = useDocumentEngine();
 
-  if (!isReady || !yDoc) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-900 text-slate-400 font-mono text-xs">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <span>Hydrating document engine...</span>
-        </div>
-      </div>
-    );
-  }
+  // if (!isReady || !yDoc) {
+  //   return (
+  //     <div className="flex h-screen items-center justify-center bg-slate-900 text-slate-400 font-mono text-xs">
+  //       <div className="flex flex-col items-center gap-3">
+  //         <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+  //         <span>Hydrating document engine...</span>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
-  return <TipTapCanvas docId={docId} yDoc={yDoc} role={role} />;
+  // return <TipTapCanvas docId={docId} yDoc={yDoc} role={role} />;
+  return <TipTapCanvas docId={docId} yDoc={yDoc} role={role} isReady={isReady} />;
 }
 
 // ==========================================
@@ -221,6 +222,11 @@ function TipTapCanvas({ docId, yDoc, role }: { docId: string, yDoc: Y.Doc, role:
             {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
             {isOnline ? "Live Network Connection" : "Offline Storage Buffering"}
           </span>
+
+          {/* upadted code */}
+<span className="text-xs text-slate-500">
+  {!isReady ? "Loading cached content..." : "Synced"}
+</span>
           <span className={`flex items-center gap-1 px-2 py-1 rounded font-mono ${syncState === 'offline' ? 'text-slate-500 bg-slate-900' : 'text-slate-400 bg-slate-800'}`}>
             <RefreshCw size={12} className={syncState === 'syncing' ? 'animate-spin text-blue-400' : ''} />
             Sync state: {syncState}

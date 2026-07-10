@@ -79,11 +79,11 @@ export const DocumentProvider = ({ docId, children }: { docId: string; children:
     
     // 💡 1. Initialize Local Database First
     const persistence = new IndexeddbPersistence(docId, doc);
-
+    setIsReady(true);
     // 💡 2. UNLOCK UI INSTANTLY when local database loads (Offline Support)
     persistence.on('synced', () => {
       console.log('✅ Local IndexedDB synced');
-      setIsReady(true);
+      //  setIsReady(true);
     });
 
     // 💡 3. Connect to Remote Hocuspocus Server silently in background

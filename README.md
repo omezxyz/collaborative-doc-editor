@@ -11,7 +11,7 @@ A high-performance, collaborative text editor built with **Next.js**, **Hocuspoc
 ## Key Features
 - **Offline Resilience:** Auto-saves to IndexedDB; syncs with the remote server when back online.
 - **Real-time Collaboration:** Powered by Yjs, enabling multi-user editing with cursor presence.
-- **AI-Powered:** Integrated with OpenAI for real-time text improvement, grammar fixing, and summarization.
+- **AI-Powered:** Integrated with Grok for real-time text improvement, grammar fixing, and summarization.
 - **Version Control:** Automated checkpointing of document states via a version history timeline.
 
 ## Deployment Strategy

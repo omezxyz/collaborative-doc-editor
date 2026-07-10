@@ -11,6 +11,7 @@
     "sync-server": "tsx server/sync-server.ts"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@hocuspocus/extension-database": "^4.3.0",
     "@hocuspocus/provider": "^4.3.0",
     "@hocuspocus/server": "^4.3.0",
