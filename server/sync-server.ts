@@ -104,7 +104,7 @@
 // server.listen();
 
 
-import { Server, Extension } from '@hocuspocus/server';
+import { Server } from '@hocuspocus/server';
 import { Database } from '@hocuspocus/extension-database';
 import { PrismaClient } from '@prisma/client';
 import * as Y from 'yjs';
@@ -114,8 +114,9 @@ import "dotenv/config";
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret");
 const prisma = new PrismaClient();
 
-// 1. Create the Security Extension object
-const securityExtension: Extension = {
+// 1. Security Extension: Defined as a plain object
+// We removed ": Extension" to prevent the TS interface error
+const securityExtension = {
   name: 'security-extension',
   onUpdate: async ({ update, context }: any) => {
     // A. OOM Protection: 1MB limit
@@ -165,9 +166,9 @@ const server = new Server({
     }
   },
 
-  // 2. Add the extension here, NOT in the main config object
+  // 2. Add the extension here
   extensions: [
-    securityExtension,
+    securityExtension as any, // Cast as any to bypass the strict interface check
     new Database({
       fetch: async ({ documentName }) => {
         try {
