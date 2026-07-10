@@ -2,11 +2,43 @@ import { Server } from '@hocuspocus/server';
 import { Database } from '@hocuspocus/extension-database';
 import { PrismaClient } from '@prisma/client';
 import * as Y from 'yjs';
+import { jwtVerify } from 'jose';
+import "dotenv/config";
+
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret");
 
 const prisma = new PrismaClient();
 
 const server = new Server({
-  port: 1234,
+  port: Number(process.env.PORT) || 1234,
+  onAuthenticate: async ({ token, documentName }) => {
+    try {
+      // 1. Verify the JWT token sent from the client
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      const userId = payload.id as string;
+
+      // 2. Query Prisma to check if this user has any role for this document
+      const permission = await prisma.documentPermission.findUnique({
+        where: {
+          documentId_userId: {
+            documentId: documentName, // The document ID is the 'name' in Hocuspocus
+            userId: userId,
+          },
+        },
+      });
+
+      // 3. If no permission record, reject connection
+      if (!permission) {
+        throw new Error("Access Denied");
+      }
+
+      // 4. Return the user info (so Hocuspocus knows who is connected)
+      return { user: { id: userId, name: payload.name } };
+    } catch (err) {
+      console.error("Auth Failed:", err);
+      throw new Error("Unauthorized");
+    }
+  },
   extensions: [
     new Database({
       // 1. FETCH: When a user connects, load the history from the database
@@ -29,7 +61,6 @@ const server = new Server({
         }
       },
 
-      // 2. STORE: When a user stops typing, save the new binary state
 // 2. STORE: Continuously overwrite ONE single "live snapshot" row (Version 0)
       store: async ({ documentName, state }) => {
         try {

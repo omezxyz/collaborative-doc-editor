@@ -1,78 +1,88 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
+import { cookies } from "next/headers";
+import { jwtVerify } from "jose";
 
-// 1. GET: Fetch all documents accessible to the active user session
-export async function GET(req: NextRequest) {
+const prisma = new PrismaClient();
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "fallback-secret-key-change-in-prod");
+
+// Helper function to decode the secure JWT cookie
+async function getSessionUser() {
+  const token = (await cookies()).get("session_token")?.value;
+  if (!token) return null;
+  
   try {
-    const session = await verifyAuth(req);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized: Session missing' }, { status: 401 });
-    }
-
-    // Retrieve documents through the permission intersection matrix
-    const userPermissions = await db.documentPermission.findMany({
-      where: { userId: session.id },
-      include: {
-        document: {
-          select: {
-            id: true,
-            title: true,
-            createdAt: true,
-            updatedAt: true,
-          }
-        }
-      },
-      orderBy: { document: { updatedAt: 'desc' } }
-    });
-
-    // Flatten data mapping for cleaner frontend consumption
-    const documents = userPermissions.map(p => ({
-      id: p.document.id,
-      title: p.document.title,
-      role: p.role,
-      createdAt: p.document.createdAt,
-      updatedAt: p.document.updatedAt,
-    }));
-
-    return NextResponse.json({ documents });
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload; // Returns { id, email, name }
   } catch (error) {
-    console.error("Dashboard list build failure:", error);
-    return NextResponse.json({ error: 'Internal database read failure' }, { status: 500 });
+    return null;
   }
 }
 
-// 2. POST: Initialize a fresh document record and establish owner privileges
-export async function POST(req: NextRequest) {
+// GET: Fetch all documents for the logged-in user
+export async function GET() {
   try {
-    const session = await verifyAuth(req);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Query Prisma for documents this user has permission to see
+    const userDocs = await prisma.document.findMany({
+      where: {
+        permissions: {
+          some: { userId: user.id as string }
+        }
+      },
+      include: {
+        permissions: {
+          where: { userId: user.id as string }
+        }
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    // Format the response to perfectly match your Dashboard interface
+    const formattedDocs = userDocs.map(doc => ({
+      id: doc.id,
+      title: doc.title,
+      role: doc.permissions[0].role,
+      updatedAt: doc.updatedAt.toISOString(),
+    }));
+
+    return NextResponse.json({ documents: formattedDocs });
+  } catch (error) {
+    console.error("Failed to fetch documents:", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+// POST: Create a new document and assign the creator as OWNER
+export async function POST(req: Request) {
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { title } = await req.json();
-    const finalTitle = title?.trim() || "Untitled Collaboration Workspace";
 
-    // Perform atomic transaction: create document, then assign OWNER permission
-    const result = await db.$transaction(async (tx) => {
-      const doc = await tx.document.create({
-        data: { title: finalTitle }
-      });
-
-      await tx.documentPermission.create({
-        data: {
-          documentId: doc.id,
-          userId: session.id,
-          role: 'OWNER'
+    // Create the document AND the permission link simultaneously using Prisma nested writes
+    const newDoc = await prisma.document.create({
+      data: {
+        title: title || "Untitled Document",
+        permissions: {
+          create: {
+            userId: user.id as string,
+            role: "OWNER" // The creator is always the owner
+          }
         }
-      });
-
-      return doc;
+      }
     });
 
-    return NextResponse.json({ success: true, document: result });
+    return NextResponse.json({ success: true, document: newDoc });
   } catch (error) {
-    console.error("Document workspace initialization broken:", error);
-    return NextResponse.json({ error: 'Internal execution fault' }, { status: 500 });
+    console.error("Failed to create document:", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

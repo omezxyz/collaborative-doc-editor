@@ -13,21 +13,22 @@ enum Role {
 }
 
 model User {
-  id         String       @id @default(uuid())
-  email      String       @unique
-  name       String?
-  permission DocumentPermission[]
-  updates    DocumentUpdate[]
+  id           String               @id @default(uuid())
+  email        String               @unique
+  name         String?
+  passwordHash String?              
+  permission   DocumentPermission[]
+  updates      DocumentUpdate[]
 }
 
 model Document {
   id          String               @id @default(uuid())
   title       String               @default("Untitled Document")
-  content     Bytes?               // <--- ADD THIS: Stores the full Yjs binary snapshot
+  content     Bytes?               //  Stores the full Yjs binary snapshot
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
   permissions DocumentPermission[]
-  updates     DocumentUpdate[]     // Keep this for your history/time-travel feature
+  updates     DocumentUpdate[]     // Keep this for history/time-travel feature
 }
 
 model DocumentPermission {

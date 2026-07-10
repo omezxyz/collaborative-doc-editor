@@ -1,17 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { cookies } from 'next/headers';
+import { jwtVerify } from 'jose';
+
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "fallback-secret-key-change-in-prod");
+
+// Clean helper to extract the new JWT user session from HTTP-only cookies
+async function getSessionUser() {
+  const token = (await cookies()).get("session_token")?.value;
+  if (!token) return null;
+  
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload; // Returns { id, email, name }
+  } catch {
+    return null;
+  }
+}
 
 // 1. GET: Fetch the complete access control list for a document
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: docId } = await params;
-    const session = await verifyAuth(req);
+    
+    // Use our new JWT cookie authentication hook
+    const session = await getSessionUser();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Ensure the requester has access to this document before leaking the user list
     const requesterPermission = await db.documentPermission.findUnique({
-      where: { documentId_userId: { documentId: docId, userId: session.id } }
+      where: { documentId_userId: { documentId: docId, userId: session.id as string } }
     });
     if (!requesterPermission) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -27,6 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ permissions });
   } catch (error) {
+    console.error("GET Share state error:", error);
     return NextResponse.json({ error: 'Failed to retrieve access registry' }, { status: 500 });
   }
 }
@@ -35,12 +54,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: docId } = await params;
-    const session = await verifyAuth(req);
+    
+    // Use our new JWT cookie authentication hook
+    const session = await getSessionUser();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Guard: Enforce that only the document OWNER can modify ACL graphs
     const requesterPermission = await db.documentPermission.findUnique({
-      where: { documentId_userId: { documentId: docId, userId: session.id } }
+      where: { documentId_userId: { documentId: docId, userId: session.id as string } }
     });
     if (!requesterPermission || requesterPermission.role !== 'OWNER') {
       return NextResponse.json({ error: 'Forbidden: Only owners can manage share states' }, { status: 403 });

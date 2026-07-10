@@ -112,7 +112,8 @@ export default function SharePanel({ docId }: { docId: string }) {
       )}
 
       {/* List of active users with access to the document */}
-      <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+      {/* FIX: Added custom scrollbar classes to this container */}
+      <div className="space-y-2 max-h-36 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-600">
         {aclList.map((entry) => (
           <div key={entry.user.id} className="flex items-center justify-between bg-slate-950 border border-slate-800/60 p-2 rounded-lg text-xs">
             <div className="min-w-0 flex flex-col gap-0.5">

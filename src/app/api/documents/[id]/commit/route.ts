@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth'; // 💡 1. Make sure to import your auth helper!
+import { cookies } from 'next/headers';
+import { jwtVerify } from 'jose';
+
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "fallback-secret-key-change-in-prod");
+
+// Helper to pull user identity out of the secure cookie stream
+async function getSessionUser() {
+  const token = (await cookies()).get("session_token")?.value;
+  if (!token) return null;
+  
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload; // Returns { id, email, name }
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(
   req: NextRequest,
@@ -9,9 +25,9 @@ export async function POST(
   try {
     const { id: docId } = await params;
     
-    // 💡 2. Get the current logged-in user's session
-    const session = await verifyAuth(req);
-    if (!session) {
+    // 1. Authenticate user session using secure JWT validation
+    const session = await getSessionUser();
+    if (!session || !session.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -23,6 +39,7 @@ export async function POST(
 
     const binaryBuffer = Buffer.from(clientState, 'base64');
 
+    // 2. Fetch the highest existing version number to calculate the next sequence index
     const lastMilestone = await db.documentUpdate.findFirst({
       where: {
         documentId: docId,
@@ -40,9 +57,7 @@ export async function POST(
         version: nextVersion,
         delta: binaryBuffer,
         message: commitMessage || `Checkpoint v${nextVersion}`,
-        
-        // 💡 3. CRITICAL FIX: Stamp the row with the user's ID!
-        userId: session.id, 
+        userId: session.id as string, // Explicit type alignment for Prisma
       }
     });
 

@@ -1,25 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { cookies } from 'next/headers';
+import { jwtVerify } from 'jose';
+
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "fallback-secret-key-change-in-prod");
+
+// Helper to safely extract user identity out of the secure cookie stream
+async function getSessionUser() {
+  const token = (await cookies()).get("session_token")?.value;
+  if (!token) return null;
+  
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload; // Returns { id, email, name }
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: docId } = await params;
     
-    // 1. Authenticate user session
-    const session = await verifyAuth(req);
+    // 1. Authenticate user session using secure JWT validation
+    const session = await getSessionUser();
     if (!session || !session.id) {
       console.error("❌ Sync API: Unauthorized or empty session id.");
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // 2. RBAC Lookup with Explicit Type Alignment
-    // Ensure session.id matches the type (string/int) required by your schema
     const permission = await db.documentPermission.findUnique({
       where: { 
         documentId_userId: { 
           documentId: docId, 
-          userId: session.id 
+          userId: session.id as string 
         } 
       }
     });

@@ -1,78 +1,95 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
+import { cookies } from "next/headers";
+import { jwtVerify } from "jose";
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+const prisma = new PrismaClient();
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "fallback-secret-key-change-in-prod");
+
+// Helper to decrypt the session
+async function getSessionUser() {
+  const token = (await cookies()).get("session_token")?.value;
+  if (!token) return null;
+  
   try {
-    const { id: docId } = await params;
-    const session = await verifyAuth(req);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const document = await db.document.findUnique({
-      where: { id: docId },
-      select: { title: true } // 💡 Grab the title
-    });
-
-    // 1. Resolve this user's dynamic role boundary from the database
-    const permission = await db.documentPermission.findUnique({
-      where: { documentId_userId: { documentId: docId, userId: session.id } }
-    });
-
-    // Fallback to VIEWER if no explicit record exists
-    const userRole = permission?.role || 'VIEWER';
-
-    // 2. Extract sequential binary document fragments
-    const updates = await db.documentUpdate.findMany({
-      where: { documentId: docId },
-      orderBy: { version: 'asc' }
-    });
-
-    const base64Updates = updates.map(u => Buffer.from(u.delta).toString('base64'));
-
-    // 3. Return BOTH the data fragments and the authenticated permission level
-    return NextResponse.json({
-      title: document?.title || "Untitled Document",
-      updates: base64Updates,
-      role: userRole 
-    });
-  } catch (error) {
-    console.error("Failed to initialize workspace layout:", error);
-    return NextResponse.json({ error: 'Internal server initialization failure' }, { status: 500 });
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload; // { id, email, name }
+  } catch {
+    return null;
   }
 }
 
-export async function DELETE(
-  req: NextRequest, 
-  { params }: { params: Promise<{ id: string }> }
+// GET: Fetch a single document's metadata and verify access
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> } // 1. Wrapped in a Promise type
 ) {
   try {
-    const { id: docId } = await params;
-    const session = await verifyAuth(req);
+    const { id } = await params; // 2. Unwrapped safely with await!
     
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 1. Verify the user is the OWNER of this document
-    const permission = await db.documentPermission.findUnique({
-      where: { documentId_userId: { documentId: docId, userId: session.id } }
+    const doc = await prisma.document.findUnique({
+      where: { id: id },
+      include: {
+        permissions: {
+          where: { userId: user.id as string }
+        }
+      }
     });
 
-    if (!permission || permission.role !== 'OWNER') {
-      return new NextResponse("Forbidden: Only owners can delete documents", { status: 403 });
+    if (!doc || doc.permissions.length === 0) {
+      return NextResponse.json({ error: "Not found or access denied" }, { status: 404 });
     }
 
-    // 2. Delete the document
-    // (Note: If your Prisma schema has onDelete: Cascade set up on relations, 
-    // this will automatically clean up permissions and checkpoints too!)
-    await db.document.delete({
-      where: { id: docId }
+    return NextResponse.json({
+      id: doc.id,
+      title: doc.title,
+      role: doc.permissions[0].role,
+      updatedAt: doc.updatedAt,
+    });
+  } catch (error) {
+    console.error("Failed fetching document:", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+// DELETE: Handle workspace deletion from the Dashboard
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> } // 1. Wrapped in a Promise type
+) {
+  try {
+    const { id } = await params; // 2. Unwrapped safely with await!
+
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const permission = await prisma.documentPermission.findUnique({
+      where: {
+        documentId_userId: {
+          documentId: id,
+          userId: user.id as string,
+        }
+      }
+    });
+
+    if (!permission || permission.role !== "OWNER") {
+      return NextResponse.json({ error: "Only the owner can delete this document" }, { status: 403 });
+    }
+
+    await prisma.document.delete({
+      where: { id: id }
     });
 
     return NextResponse.json({ success: true });
-    
   } catch (error) {
-    console.error("🔥 Document Deletion Failed:", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    console.error("Failed deleting document:", error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
