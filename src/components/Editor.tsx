@@ -126,7 +126,7 @@ function TipTapCanvas({ docId, yDoc, role }: { docId: string, yDoc: Y.Doc, role:
   const editor = useEditor({
     editable: role !== 'VIEWER',
     extensions: [
-      StarterKit.configure({ history: false }), 
+      StarterKit.configure({ undoRedo: false}), 
       Collaboration.configure({ document: yDoc, field: 'prosemirror' })
     ],
     editorProps: {

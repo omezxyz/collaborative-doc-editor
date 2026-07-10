@@ -11,7 +11,6 @@
     "sync-server": "tsx server/sync-server.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.8",
     "@hocuspocus/extension-database": "^4.3.0",
     "@hocuspocus/provider": "^4.3.0",
     "@hocuspocus/server": "^4.3.0",
@@ -22,8 +21,8 @@
     "@tiptap/pm": "^3.27.3",
     "@tiptap/react": "^3.27.3",
     "@tiptap/starter-kit": "^3.27.3",
-    "ai": "^7.0.15",
     "bcryptjs": "^3.0.3",
+    "geist": "^1.7.2",
     "jose": "^6.2.3",
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
