@@ -25,6 +25,7 @@ import {
   Wand2,
   FileSearch,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -432,6 +433,16 @@ function TipTapCanvas({
 
       <div className="flex-1 flex overflow-hidden">
         <main className="flex-1 overflow-y-auto bg-slate-950/30 p-8 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-600">
+          {/* 💡 READ ONLY BANNER */}
+          {role === "VIEWER" && (
+            <div className="max-w-[800px] mx-auto mb-4 bg-amber-900/20 border border-amber-700/50 text-amber-200 text-xs px-4 py-3 rounded-sm flex items-center gap-3 shadow-sm">
+              <AlertCircle size={16} className="text-amber-500" />
+              <div>
+                <span className="font-bold">Read-Only Mode:</span> You do not
+                have permission to edit this document.
+              </div>
+            </div>
+          )}
           <div className="max-w-[800px] mx-auto min-h-[1056px] bg-slate-900 border border-slate-800 shadow-2xl rounded-sm">
             <EditorContent editor={editor} />
           </div>

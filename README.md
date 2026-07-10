@@ -34,6 +34,27 @@ Utilized **Prisma** as the ORM to bridge the application logic and the PostgreSQ
 * **Migration Strategy:** Use `npx prisma db push` for rapid prototyping or `npx prisma migrate dev` for production-ready schema versioning.
 * **Type Generation:** Prisma types are automatically regenerated on install, ensuring the build pipeline is always synchronized with the database schema.
 
+# Security & Mitigation Strategy
+
+This document outlines the security considerations and mitigation strategies implemented in the Documesh editor to ensure system stability and data integrity.
+
+## 1. Malicious Payload Mitigation (OOM Prevention)
+To prevent malicious actors from sending massive, malformed synchronization payloads that could cause Out of Memory (OOM) errors, we implement strict input validation:
+*   **Payload Size Limiting:** The server-side Hocuspocus configuration enforces a maximum size limit (1MB) on all incoming WebSocket updates. Payloads exceeding this limit are rejected immediately, and the connection is flagged.
+*   **Update Validation:** Incoming updates are checked at the `onUpdate` hook stage before being merged into the document state.
+
+## 2. Authorization & Tenant Isolation
+*   **JWT-Based Authentication:** All WebSocket connections require a valid JWT token passed during the connection handshake.
+*   **Role-Based Access Control (RBAC):** We distinguish between `Owner`, `Editor`, and `Viewer` roles. 
+    *   **Viewers:** The server-side hooks verify the user's role; if a `Viewer` attempts to push an update, the operation is blocked.
+*   **ORM Scoping:** Prisma is configured with row-level scoping, ensuring users can only fetch or modify documents they are authorized to access. We prevent cross-tenant data leaks by enforcing ownership checks on every database query.
+
+## 3. Rate Limiting
+*   While not currently enforced via a global rate-limiter, the current architecture supports per-connection throttling, ensuring that a single user cannot flood the server with excessive WebSocket events.
+
+## 4. Contingency Plans
+*   **Graceful Degradation:** In the event of a server-side error, the frontend is designed to buffer the changes locally in `IndexedDB` until the synchronization service is back online.
+
 ## Environment Variables
 Ensure the following variables are configured in your environment (Local `.env` and Vercel/Render Project Settings):
 
