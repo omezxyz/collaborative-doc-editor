@@ -58,7 +58,7 @@ export default function Editor({ docId }: { docId: string }) {
     );
   }
   return (
-    <TipTapCanvas docId={docId} yDoc={yDoc} role={role} isReady={isReady} />
+   <TipTapCanvas docId={docId} yDoc={yDoc} role={role} />
   );
 }
 

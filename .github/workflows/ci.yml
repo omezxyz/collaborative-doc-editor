@@ -14,8 +14,14 @@ jobs:
         with:
           node-version: '22' 
           cache: 'npm'
+          
       - name: Install Dependencies
         run: npm install 
+        env:
+          # Prisma runs 'postinstall' here and strictly requires this variable
+          # A dummy string works fine because it just needs to map your schema types
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          
       - name: Build Next.js App
         run: npm run build
         env:
