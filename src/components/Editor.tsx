@@ -57,9 +57,7 @@ export default function Editor({ docId }: { docId: string }) {
       </div>
     );
   }
-  return (
-   <TipTapCanvas docId={docId} yDoc={yDoc} role={role} />
-  );
+  return <TipTapCanvas docId={docId} yDoc={yDoc} role={role} />;
 }
 
 // ==========================================
@@ -289,7 +287,7 @@ function TipTapCanvas({
 
           {/* upadted code */}
           <span className="text-xs text-slate-500">
-            {!isReady ? "Loading cached content..." : "Synced"}
+            {!yDoc ? "Loading cached content..." : "Synced"}
           </span>
           <span
             className={`flex items-center gap-1 px-2 py-1 rounded font-mono ${
