@@ -103,7 +103,8 @@
 
 // server.listen();
 
-import { Server } from '@hocuspocus/server';
+
+import { Server, Extension } from '@hocuspocus/server';
 import { Database } from '@hocuspocus/extension-database';
 import { PrismaClient } from '@prisma/client';
 import * as Y from 'yjs';
@@ -113,10 +114,28 @@ import "dotenv/config";
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret");
 const prisma = new PrismaClient();
 
+// 1. Create the Security Extension object
+const securityExtension: Extension = {
+  name: 'security-extension',
+  onUpdate: async ({ update, context }: any) => {
+    // A. OOM Protection: 1MB limit
+    const MAX_UPDATE_SIZE = 1024 * 1024;
+    if (update.byteLength > MAX_UPDATE_SIZE) {
+      console.error(`[Security] Blocked oversized update from user ${context.user?.id}`);
+      throw new Error("Payload size limit exceeded");
+    }
+
+    // B. RBAC: Prevent 'VIEWER' from pushing changes
+    if (context.user?.role === 'VIEWER') {
+      console.warn(`[Security] Unauthorized write attempt by Viewer: ${context.user.id}`);
+      throw new Error("You do not have permission to edit this document");
+    }
+  }
+};
+
 const server = new Server({
   port: Number(process.env.PORT) || 1234,
 
-  // UPDATED: Include role in the context
   onAuthenticate: async ({ token, documentName }) => {
     try {
       const { payload } = await jwtVerify(token, JWT_SECRET);
@@ -131,11 +150,8 @@ const server = new Server({
         },
       });
 
-      if (!permission) {
-        throw new Error("Access Denied");
-      }
+      if (!permission) throw new Error("Access Denied");
 
-      // Return user info + role (Hocuspocus adds this to 'context')
       return { 
         user: { 
           id: userId, 
@@ -149,24 +165,9 @@ const server = new Server({
     }
   },
 
-  // NEW: Security Layer
-  onUpdate: async ({ update, context }) => {
-    // 1. OOM Protection: 1MB limit
-    const MAX_UPDATE_SIZE = 1024 * 1024;
-    if (update.byteLength > MAX_UPDATE_SIZE) {
-      console.error(`[Security] Blocked oversized update from user ${context.user.id}`);
-      throw new Error("Payload size limit exceeded");
-    }
-
-    // 2. RBAC: Prevent 'VIEWER' from pushing changes
-    // Ensure 'VIEWER' matches the exact name in your Prisma Enum
-    if (context.user.role === 'VIEWER') {
-      console.warn(`[Security] Unauthorized write attempt by Viewer: ${context.user.id}`);
-      throw new Error("You do not have permission to edit this document");
-    }
-  },
-
+  // 2. Add the extension here, NOT in the main config object
   extensions: [
+    securityExtension,
     new Database({
       fetch: async ({ documentName }) => {
         try {
@@ -187,30 +188,19 @@ const server = new Server({
       store: async ({ documentName, state }) => {
         try {
           const existingLiveState = await prisma.documentUpdate.findFirst({
-            where: {
-              documentId: documentName,
-              version: 0,
-            },
+            where: { documentId: documentName, version: 0 },
           });
 
           if (existingLiveState) {
             await prisma.documentUpdate.update({
               where: { id: existingLiveState.id },
-              data: {
-                delta: Buffer.from(state),
-                createdAt: new Date(),
-              },
+              data: { delta: Buffer.from(state), createdAt: new Date() },
             });
           } else {
             await prisma.documentUpdate.create({
-              data: {
-                documentId: documentName,
-                version: 0,
-                delta: Buffer.from(state),
-              },
+              data: { documentId: documentName, version: 0, delta: Buffer.from(state) },
             });
           }
-          console.log(`⚡ Live state cached for ${documentName}`);
         } catch (error) {
           console.error("Sync Server Live Store Error:", error);
         }
